@@ -3,29 +3,50 @@ param(
     $functionUrl = "http://localhost:7071/api/StorageBatches_HttpStart",
     [Parameter(Mandatory=$true)]
     [string]
-    $invocationId # used to generate unique paths, otherwise the function just digs up an old instance!
-)
+    $customerId,
+    [string]
+    $timestamp # used to generate unique paths, otherwise the function just digs up an old instance!
 
+)
 $ErrorActionPreference = "Stop"
 
-$path = "$rootPath\01-simple-$invocationId"
-if (!(Test-Path $path)){
-    New-Item -Path $path -ItemType Directory
+if ($timestamp -eq ""){
+    $timestamp = Get-Date -f "yyyyMMdd_HHmm"
+    Write-Host "Using timestamp of $timestamp"
+    Write-Host
 }
 
-Set-Content -Path "$path\file1.txt" -Value "test"
-Write-Host "$functionUrl`?path=$path\file1.txt"
-$r = Invoke-RestMethod "$functionUrl`?path=$path\file1.txt"
+$customerFileLookup = @{
+    cust1 = @("file1.txt", "file2.txt", "file3.txt", "file4.txt")
+}
 
-Set-Content -Path "$path\file2.txt" -Value "test"
-$r = Invoke-RestMethod "$functionUrl`?path=$path\file2.txt"
+$customerFiles = $customerFileLookup[$customerId]
+if ($customerFiles -eq $null){
+    Write-Host "Customer not found - $customerId"
+    return
+}
 
-Set-Content -Path "$path\file3.txt" -Value "test"
-$r = Invoke-RestMethod "$functionUrl`?path=$path\file3.txt"
+$path = "$rootPath\01-simple"
+if (!(Test-Path $path)){
+    New-Item -Path $path -ItemType Directory    
+}
 
-Set-Content -Path "$path\file4.txt" -Value "test"
-$r = Invoke-RestMethod "$functionUrl`?path=$path\file4.txt"
+$customerFiles | ForEach-Object {
+    # Create file
+    Set-Content -Path "$path\$($customerId)_$($timestamp)_$($_)" -Value "test"
+    # Invoke trigger for each file
+    $r = Invoke-RestMethod "$functionUrl`?path=$path\$($customerId)_$($timestamp)_$($customerFiles[0])"
+}
 
+while ($true){
+    $status = Invoke-RestMethod $r.statusQueryGetUri
+    if ($status.runtimeStatus -eq "Completed"){
+        Write-Host "Function completed"
+        break
+    }
+    Write-Host "Status: $($status.runtimeStatus) - last updated $($status.lastUpdatedTime) ..."
+    Start-Sleep -Seconds 3
+}
 
 Invoke-RestMethod $r.statusQueryGetUri
 

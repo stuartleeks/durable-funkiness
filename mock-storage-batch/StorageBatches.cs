@@ -14,16 +14,11 @@ namespace mock_storage_batch
 {
     public static class StorageBatches
     {
-        // TODO - morph the implementation towards this definition:
-        //public class BatchContext
-        //{
-        //    public string CustomerId { get; set; }
-        //    public string BatchId { get; set; }
-        //    public string[] RequiredFiles { get; set; }
-        //}
         public class BatchContext
         {
             public string FolderName { get; set; }
+            public string CustomerId { get; set; }
+            public string BatchId { get; set; }
             public string[] RequiredFiles { get; set; }
         }
 
@@ -43,16 +38,11 @@ namespace mock_storage_batch
             [OrchestrationTrigger] DurableOrchestrationContext context,
             TraceWriter log)
         {
-            var folderName = context.GetInput<string>();
-            log.Info($"Starting: {folderName}");
+            var batchContext = context.GetInput<BatchContext>();
+            log.Info($"Starting: {batchContext.BatchId} (folder: {batchContext.FolderName})");
 
             var filesToWaitFor = new[] { "file1.txt", "file2.txt", "file3.txt", "file4.txt" };
-
-            var batchContext = new BatchContext
-            {
-                FolderName = folderName,
-                RequiredFiles = filesToWaitFor
-            };
+            batchContext.RequiredFiles = filesToWaitFor;
 
             // Wait for all required files
             // Pushing IO to activity function as per https://docs.microsoft.com/en-us/azure/azure-functions/durable-functions-perf-and-scale#thread-usage
@@ -65,9 +55,10 @@ namespace mock_storage_batch
             // If each file can be processed independently then could split into multiple activity invocations
             await context.CallActivityAsync("ProcessFiles", batchContext);
 
-            log.Info($"Done: {folderName}");
-            return folderName;
+            log.Info($"Done: {batchContext.BatchId} (folder: {batchContext.FolderName})");
+            return batchContext.BatchId;
         }
+
 
         [FunctionName("AreRequiredFilesPresent")]
         public static bool AreRequiredFilesPresent(
@@ -122,16 +113,15 @@ namespace mock_storage_batch
                 return req.CreateResponse(HttpStatusCode.BadRequest, "path querystring value missing", new JsonMediaTypeFormatter());
             }
 
-            var folderName = Path.GetDirectoryName(path);
-
-            var instanceId = $"instance-{folderName.Replace(":", "").Replace("\\", "_")}";
+            var batchContext = GetBatchContextFromPath(path);            
+            var instanceId = $"instance-{batchContext.BatchId}";
 
             log.Info($"Looking up instance: {instanceId}");
             var status = await starter.GetStatusAsync(instanceId);
             if (status == null)
             {
                 log.Info($"no instance found - {instanceId} - starting...");
-                await starter.StartNewAsync("StorageBatches", instanceId, folderName);
+                await starter.StartNewAsync("StorageBatches", instanceId, batchContext);
                 log.Info($"Started orchestration with ID = '{instanceId}'.");
 
                 System.Threading.Thread.Sleep(5000); // TODO - investigate the error that occurs if we remove this
@@ -151,6 +141,28 @@ namespace mock_storage_batch
             }
 
             return starter.CreateCheckStatusResponse(req, instanceId);
+        }
+
+        /// <summary>
+        /// Generate a base BatchContext from a trigger path
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        public static BatchContext GetBatchContextFromPath(string path)
+        {
+            var folderName = Path.GetDirectoryName(path);
+            var filename = Path.GetFileName(path);
+
+            // TODO error handling ;-)
+            var customerId = filename.Substring(0, filename.IndexOf('_'));
+            var batchId = filename.Substring(0, filename.LastIndexOf('_'));
+
+            return new BatchContext
+            {
+                FolderName = folderName,
+                CustomerId = customerId,
+                BatchId = batchId
+            };
         }
     }
 }
