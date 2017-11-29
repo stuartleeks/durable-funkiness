@@ -27,6 +27,17 @@ namespace mock_storage_batch
             public string[] RequiredFiles { get; set; }
         }
 
+        public static class KnownRuntimeStatuses
+        {
+            public const string Running = "Running";
+            public const string Completed = "Completed";
+        }
+        public static class EventNames
+        {
+            // one or more new files to inspect
+            public const string NewFiles = "NewFiles";
+        }
+
         [FunctionName("StorageBatches")]
         public static async Task<string> RunOrchestrator(
             [OrchestrationTrigger] DurableOrchestrationContext context,
@@ -43,8 +54,12 @@ namespace mock_storage_batch
                 RequiredFiles = filesToWaitFor
             };
 
-            var fileWaitTasks = filesToWaitFor.Select(f => context.WaitForExternalEvent<object>(f));
-            await Task.WhenAll(fileWaitTasks);
+            // Wait for all required files
+            // Pushing IO to activity function as per https://docs.microsoft.com/en-us/azure/azure-functions/durable-functions-perf-and-scale#thread-usage
+            while (! await context.CallActivityAsync<bool>("AreRequiredFilesPresent", batchContext))
+            {
+                await context.WaitForExternalEvent<object>(EventNames.NewFiles);
+            }
 
             // Currently process all files in a single activity function
             // If each file can be processed independently then could split into multiple activity invocations
@@ -54,15 +69,31 @@ namespace mock_storage_batch
             return folderName;
         }
 
+        [FunctionName("AreRequiredFilesPresent")]
+        public static bool AreRequiredFilesPresent(
+            [ActivityTrigger]
+            BatchContext batchContext,
+            TraceWriter log)
+        {
+            // TODO  - replace this with test for blob file existence
+            return batchContext.RequiredFiles
+                        .Select(f => Path.Combine(batchContext.FolderName, f))
+                        .All(File.Exists);
+        }
+
         [FunctionName("ProcessFiles")]
         public static void ProcessFiles(
             [ActivityTrigger]
             BatchContext batchContext,
             TraceWriter log)
         {
+            log.Info($"*** ProcessFiles {batchContext.FolderName}");
             foreach (var filename in batchContext.RequiredFiles)
             {
-                // TODO - insert real processing here (for now, just deleting)
+                // TODO - insert real processing here
+                System.Threading.Thread.Sleep(2500);
+
+                // TODO - replace local file access with blob access
                 var path = Path.Combine(batchContext.FolderName, filename);
                 if (File.Exists(path))
                 {
@@ -78,6 +109,7 @@ namespace mock_storage_batch
 
         [FunctionName("StorageBatches_HttpStart")]
         public static async Task<HttpResponseMessage> HttpStart(
+            // TODO - replace HttpTrigger with eventgrid trigger for blobs
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")]HttpRequestMessage req,
             [OrchestrationClient]DurableOrchestrationClient starter,
             TraceWriter log)
@@ -106,28 +138,19 @@ namespace mock_storage_batch
             }
             else
             {
-                log.Info($"Got existing instance for {instanceId} (name {status.Name} - status {status.RuntimeStatus})");
+                if (status.RuntimeStatus == KnownRuntimeStatuses.Running)
+                {
+                    log.Info($"Got existing instance for {instanceId} (name {status.Name}). Raising external event  - status {status.RuntimeStatus})");
+                    await starter.RaiseEventAsync(instanceId, EventNames.NewFiles, null);
+                }
+                else
+                {
+                    // TODO determine whether this is a case that should be filtered out (e.g. if there are surplus files that could trigger us but should be ignored)
+                    log.Error($"Got existing instance for {instanceId} (name {status.Name}), but it isn't running");
+                }
             }
-
-            await RaiseEvent(starter, log, folderName, instanceId, "file1.txt");
-            await RaiseEvent(starter, log, folderName, instanceId, "file2.txt");
-            await RaiseEvent(starter, log, folderName, instanceId, "file3.txt");
-            await RaiseEvent(starter, log, folderName, instanceId, "file4.txt");
 
             return starter.CreateCheckStatusResponse(req, instanceId);
-        }
-
-        private static async Task RaiseEvent(DurableOrchestrationClient starter, TraceWriter log, string folderName, string instanceId, string name)
-        {
-            if (File.Exists(Path.Combine(folderName, $"{name}")))
-            {
-                log.Info($"*** file {name} for folder {folderName} - found");
-                await starter.RaiseEventAsync(instanceId, name, null);
-            }
-            else
-            {
-                log.Info($"*** file {name} for folder {folderName} - missing");
-            }
         }
     }
 }
