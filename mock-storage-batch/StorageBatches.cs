@@ -98,6 +98,7 @@ namespace mock_storage_batch
             [OrchestrationClient]DurableOrchestrationClient starter,
             TraceWriter log)
         {
+            // Determine path
             var query = req.RequestUri.ParseQueryString();
             var path = query["path"];
             if (string.IsNullOrEmpty(path))
@@ -106,9 +107,11 @@ namespace mock_storage_batch
                 return req.CreateResponse(HttpStatusCode.BadRequest, "path querystring value missing", new JsonMediaTypeFormatter());
             }
 
+            // Get context (required files, instance id, ...)
             var batchContext = GetBatchContextFromPath(path);
             var instanceId = $"instance-{batchContext.BatchId}";
 
+            // Find or start an orchestration instance
             log.Info($"Looking up instance: {instanceId}");
             var status = await starter.GetStatusAsync(instanceId);
             if (status == null)
@@ -123,6 +126,8 @@ namespace mock_storage_batch
             {
                 log.Info($"Got existing instance for {instanceId} (name {status.Name}). status {status.RuntimeStatus})");
             }
+
+            // Raise events for files files that are already in place
             log.Info($"{instanceId}: Raising events for files that exist");
             foreach (var requiredFile in batchContext.RequiredFiles)
             {
