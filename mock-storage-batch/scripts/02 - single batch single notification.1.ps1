@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($timestamp -eq ""){
-    $timestamp = Get-Date -f "yyyyMMdd_HHmm"
+    $timestamp = Get-Date -f "yyyyMMdd_HHmmss" # scenario was just hhmm at the end, but added ss for ease of dev
     Write-Host "Using timestamp of $timestamp"
     Write-Host
 }

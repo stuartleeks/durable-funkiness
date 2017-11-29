@@ -29,8 +29,7 @@ namespace mock_storage_batch
         }
         public static class EventNames
         {
-            // one or more new files to inspect
-            public const string NewFiles = "NewFiles";
+            public static string NewFile(string filename) => $"NewFile_{filename}";
         }
 
         [FunctionName("StorageBatches")]
@@ -41,15 +40,17 @@ namespace mock_storage_batch
             var batchContext = context.GetInput<BatchContext>();
             log.Info($"Starting: {batchContext.BatchId} (folder: {batchContext.FolderName})");
 
-            var filesToWaitFor = new[] { "file1.txt", "file2.txt", "file3.txt", "file4.txt" };
-            batchContext.RequiredFiles = filesToWaitFor;
 
-            // Wait for all required files
-            // Pushing IO to activity function as per https://docs.microsoft.com/en-us/azure/azure-functions/durable-functions-perf-and-scale#thread-usage
-            while (! await context.CallActivityAsync<bool>("AreRequiredFilesPresent", batchContext))
+            // Wait for events for all required files
+            //var requiredFileTasks = batchContext.RequiredFiles
+            //                                .Select(f => context.WaitForExternalEvent<object>(EventNames.NewFile(f)))
+            //                                .ToArray();
+            //await Task.WhenAll(requiredFileTasks);
+            foreach (var file in batchContext.RequiredFiles)
             {
-                await context.WaitForExternalEvent<object>(EventNames.NewFiles);
+                await context.WaitForExternalEvent<object>(EventNames.NewFile(file));
             }
+
 
             // Currently process all files in a single activity function
             // If each file can be processed independently then could split into multiple activity invocations
@@ -57,19 +58,6 @@ namespace mock_storage_batch
 
             log.Info($"Done: {batchContext.BatchId} (folder: {batchContext.FolderName})");
             return batchContext.BatchId;
-        }
-
-
-        [FunctionName("AreRequiredFilesPresent")]
-        public static bool AreRequiredFilesPresent(
-            [ActivityTrigger]
-            BatchContext batchContext,
-            TraceWriter log)
-        {
-            // TODO  - replace this with test for blob file existence
-            return batchContext.RequiredFiles
-                        .Select(f => Path.Combine(batchContext.FolderName, f))
-                        .All(File.Exists);
         }
 
         [FunctionName("ProcessFiles")]
@@ -85,7 +73,7 @@ namespace mock_storage_batch
                 System.Threading.Thread.Sleep(2500);
 
                 // TODO - replace local file access with blob access
-                var path = Path.Combine(batchContext.FolderName, filename);
+                var path = Path.Combine(batchContext.FolderName, $"{batchContext.BatchId}_{filename}");
                 if (File.Exists(path))
                 {
                     log.Verbose($"Deleting {path}");
@@ -113,7 +101,7 @@ namespace mock_storage_batch
                 return req.CreateResponse(HttpStatusCode.BadRequest, "path querystring value missing", new JsonMediaTypeFormatter());
             }
 
-            var batchContext = GetBatchContextFromPath(path);            
+            var batchContext = GetBatchContextFromPath(path);
             var instanceId = $"instance-{batchContext.BatchId}";
 
             log.Info($"Looking up instance: {instanceId}");
@@ -128,19 +116,28 @@ namespace mock_storage_batch
             }
             else
             {
-                if (status.RuntimeStatus == KnownRuntimeStatuses.Running)
-                {
-                    log.Info($"Got existing instance for {instanceId} (name {status.Name}). Raising external event  - status {status.RuntimeStatus})");
-                    await starter.RaiseEventAsync(instanceId, EventNames.NewFiles, null);
-                }
-                else
-                {
-                    // TODO determine whether this is a case that should be filtered out (e.g. if there are surplus files that could trigger us but should be ignored)
-                    log.Error($"Got existing instance for {instanceId} (name {status.Name}), but it isn't running");
-                }
+                log.Info($"Got existing instance for {instanceId} (name {status.Name}). status {status.RuntimeStatus})");
+            }
+            log.Info($"{instanceId}: Raising events for files that exist");
+            foreach (var requiredFile in batchContext.RequiredFiles)
+            {
+                await RaiseEventIfFileExists(starter, log, instanceId, batchContext.FolderName, batchContext.BatchId, requiredFile);
             }
 
             return starter.CreateCheckStatusResponse(req, instanceId);
+        }
+        private static async Task RaiseEventIfFileExists(DurableOrchestrationClient starter, TraceWriter log, string instanceId, string folderName, string batchId, string filename)
+        {
+            var concatenatedFilename = $"{batchId}_{filename}";
+            if (File.Exists(Path.Combine(folderName, concatenatedFilename)))
+            {
+                log.Info($"*** file {concatenatedFilename} for batch {batchId} - found");
+                await starter.RaiseEventAsync(instanceId, EventNames.NewFile(filename), null);
+            }
+            else
+            {
+                log.Info($"*** file {concatenatedFilename} for batch {batchId} - missing");
+            }
         }
 
         /// <summary>
@@ -156,13 +153,33 @@ namespace mock_storage_batch
             // TODO error handling ;-)
             var customerId = filename.Substring(0, filename.IndexOf('_'));
             var batchId = filename.Substring(0, filename.LastIndexOf('_'));
+            var filesToWaitFor = GetRequiredFilesForCustomer(customerId);
+
+            if (filesToWaitFor == null)
+            {
+                throw new Exception($"Customer {customerId} not found");
+            }
 
             return new BatchContext
             {
                 FolderName = folderName,
                 CustomerId = customerId,
-                BatchId = batchId
+                BatchId = batchId,
+                RequiredFiles = filesToWaitFor
             };
+        }
+
+        public static string[] GetRequiredFilesForCustomer(string customerId)
+        {
+            // TODO - look this up in a database
+            switch (customerId)
+            {
+                case "cust1":
+                    return new[] { "file1.txt", "file2.txt", "file3.txt", "file4.txt" };
+
+                default:
+                    return null;
+            }
         }
     }
 }
