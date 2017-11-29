@@ -66,12 +66,15 @@ namespace mock_storage_batch
             BatchContext batchContext,
             TraceWriter log)
         {
-            log.Info($"*** ProcessFiles {batchContext.FolderName}");
+            log.Info($"*** ProcessFiles {batchContext.FolderName} - starting...");
+
+            // TODO - insert real processing here
+            System.Threading.Thread.Sleep(2500);
+
+            log.Info($"*** ProcessFiles {batchContext.FolderName} - done, cleaning up....");
+
             foreach (var filename in batchContext.RequiredFiles)
             {
-                // TODO - insert real processing here
-                System.Threading.Thread.Sleep(2500);
-
                 // TODO - replace local file access with blob access
                 var path = Path.Combine(batchContext.FolderName, $"{batchContext.BatchId}_{filename}");
                 if (File.Exists(path))
@@ -84,6 +87,8 @@ namespace mock_storage_batch
                     log.Error($"Missing file {path}"); // shouldn't hit this!
                 }
             }
+
+            log.Info($"*** ProcessFiles {batchContext.FolderName} - done");
         }
 
         [FunctionName("StorageBatches_HttpStart")]
