@@ -2,6 +2,7 @@ param(
     $rootPath = "c:\temp\mock-storage-batch-test",
     $functionUrl = "http://localhost:7071/api/StorageBatches_HttpStart",
     [Parameter(Mandatory=$true)]
+    [ValidateSet("cust1", "cust2", "cust3")]
     [string]
     $customerId,
     [string]
@@ -16,7 +17,9 @@ if ($timestamp -eq ""){
 }
 
 $customerFileLookup = @{
-    cust1 = @("file1.txt", "file2.txt", "file3.txt", "file4.txt")
+    cust1 = @("file1.txt", "file2.txt", "file3.txt", "file4.txt");
+    cust2 = @("file1.txt", "file2.txt");
+    cust3 = @("file1.txt", "file2.txt", "file3.txt", "file4.txt", "file5.txt", "file6.txt", "file7.txt", "file8.txt", "file9.txt");
 }
 
 $customerFiles = $customerFileLookup[$customerId]

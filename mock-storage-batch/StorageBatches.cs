@@ -176,7 +176,10 @@ namespace mock_storage_batch
             {
                 case "cust1":
                     return new[] { "file1.txt", "file2.txt", "file3.txt", "file4.txt" };
-
+                case "cust2":
+                    return new[] { "file1.txt", "file2.txt" };
+                case "cust3":
+                    return new[] { "file1.txt", "file2.txt", "file3.txt", "file4.txt", "file5.txt", "file6.txt", "file7.txt", "file8.txt", "file9.txt" };
                 default:
                     return null;
             }
