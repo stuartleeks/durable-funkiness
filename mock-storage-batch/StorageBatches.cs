@@ -22,10 +22,16 @@ namespace mock_storage_batch
             public string[] RequiredFiles { get; set; }
         }
 
-        public static class KnownRuntimeStatuses
+        public static class RuntimeStatus
         {
+            // Info here: https://docs.microsoft.com/en-us/azure/azure-functions/durable-functions-instance-management#querying-instances
+            // Issue for enum: https://github.com/Azure/azure-functions-durable-extension/issues/100
+
             public const string Running = "Running";
             public const string Completed = "Completed";
+            public const string ContinuedAsNew = "ContinuedAsNew";
+            public const string Failed = "Failed";
+            public const string Terminated = "Terminated";
         }
         public static class EventNames
         {
@@ -120,7 +126,14 @@ namespace mock_storage_batch
                 await starter.StartNewAsync("StorageBatches", instanceId, batchContext);
                 log.Info($"Started orchestration with ID = '{instanceId}'.");
 
-                System.Threading.Thread.Sleep(5000); // TODO - investigate the error that occurs if we remove this
+                // workaround for https://github.com/Azure/azure-functions-durable-extension/issues/101
+                log.Info($"Checking for orchestration with ID {instanceId}...");
+                while (null == await starter.GetStatusAsync(instanceId))
+                {
+                    System.Threading.Thread.Sleep(500);
+                    log.Info($"Checking for orchestration with ID {instanceId}...");
+                }
+                log.Info($"Checking for orchestration with ID {instanceId}... found it!");
             }
             else
             {
