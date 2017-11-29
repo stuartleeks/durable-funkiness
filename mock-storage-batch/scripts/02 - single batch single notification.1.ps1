@@ -49,3 +49,5 @@ while ($true){
     Write-Host "Status: $($status.runtimeStatus) - last updated $($status.lastUpdatedTime) ..."
     Start-Sleep -Seconds 3
 }
+
+Invoke-RestMethod $r.statusQueryGetUri
