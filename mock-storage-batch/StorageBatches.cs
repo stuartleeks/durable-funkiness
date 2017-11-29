@@ -14,6 +14,19 @@ namespace mock_storage_batch
 {
     public static class StorageBatches
     {
+        // TODO - morph the implementation towards this definition:
+        //public class BatchContext
+        //{
+        //    public string CustomerId { get; set; }
+        //    public string BatchId { get; set; }
+        //    public string[] RequiredFiles { get; set; }
+        //}
+        public class BatchContext
+        {
+            public string FolderName { get; set; }
+            public string[] RequiredFiles { get; set; }
+        }
+
         [FunctionName("StorageBatches")]
         public static async Task<string> RunOrchestrator(
             [OrchestrationTrigger] DurableOrchestrationContext context,
@@ -22,40 +35,46 @@ namespace mock_storage_batch
             var folderName = context.GetInput<string>();
             log.Info($"Starting: {folderName}");
 
-            var filesToWaitFor = new[] { "file1", "file2", "file3", "file4" };
+            var filesToWaitFor = new[] { "file1.txt", "file2.txt", "file3.txt", "file4.txt" };
+
+            var batchContext = new BatchContext
+            {
+                FolderName = folderName,
+                RequiredFiles = filesToWaitFor
+            };
 
             var fileWaitTasks = filesToWaitFor.Select(f => context.WaitForExternalEvent<object>(f));
             await Task.WhenAll(fileWaitTasks);
 
-            foreach (var fileToWaitFor in filesToWaitFor)
-            {
-                DeleteFile(folderName, $"{fileToWaitFor}.txt", log);
-            }
+            // Currently process all files in a single activity function
+            // If each file can be processed independently then could split into multiple activity invocations
+            await context.CallActivityAsync("ProcessFiles", batchContext);
 
             log.Info($"Done: {folderName}");
             return folderName;
         }
 
-        private static void DeleteFile(string folderName, string filename, TraceWriter log)
+        [FunctionName("ProcessFiles")]
+        public static void ProcessFiles(
+            [ActivityTrigger]
+            BatchContext batchContext,
+            TraceWriter log)
         {
-            var path = Path.Combine(folderName, filename);
-            if (File.Exists(path))
+            foreach (var filename in batchContext.RequiredFiles)
             {
-                log.Verbose($"Deleting {path}");
-                File.Delete(path);
-            }
-            else
-            {
-                log.Error($"Missing file {path}");
+                // TODO - insert real processing here (for now, just deleting)
+                var path = Path.Combine(batchContext.FolderName, filename);
+                if (File.Exists(path))
+                {
+                    log.Verbose($"Deleting {path}");
+                    File.Delete(path);
+                }
+                else
+                {
+                    log.Error($"Missing file {path}"); // shouldn't hit this!
+                }
             }
         }
-
-        //[FunctionName("StorageBatches_Hello")]
-        //public static string SayHello([ActivityTrigger] string name, TraceWriter log)
-        //{
-        //    log.Info($"Saying hello to {name}.");
-        //    return $"Hello {name}!";
-        //}
 
         [FunctionName("StorageBatches_HttpStart")]
         public static async Task<HttpResponseMessage> HttpStart(
@@ -82,6 +101,7 @@ namespace mock_storage_batch
                 log.Info($"no instance found - {instanceId} - starting...");
                 await starter.StartNewAsync("StorageBatches", instanceId, folderName);
                 log.Info($"Started orchestration with ID = '{instanceId}'.");
+
                 System.Threading.Thread.Sleep(5000); // TODO - investigate the error that occurs if we remove this
             }
             else
@@ -89,17 +109,17 @@ namespace mock_storage_batch
                 log.Info($"Got existing instance for {instanceId} (name {status.Name} - status {status.RuntimeStatus})");
             }
 
-            await RaiseEvent(starter, log, folderName, instanceId, "file1");
-            await RaiseEvent(starter, log, folderName, instanceId, "file2");
-            await RaiseEvent(starter, log, folderName, instanceId, "file3");
-            await RaiseEvent(starter, log, folderName, instanceId, "file4");
+            await RaiseEvent(starter, log, folderName, instanceId, "file1.txt");
+            await RaiseEvent(starter, log, folderName, instanceId, "file2.txt");
+            await RaiseEvent(starter, log, folderName, instanceId, "file3.txt");
+            await RaiseEvent(starter, log, folderName, instanceId, "file4.txt");
 
             return starter.CreateCheckStatusResponse(req, instanceId);
         }
 
         private static async Task RaiseEvent(DurableOrchestrationClient starter, TraceWriter log, string folderName, string instanceId, string name)
         {
-            if (File.Exists(Path.Combine(folderName, $"{name}.txt")))
+            if (File.Exists(Path.Combine(folderName, $"{name}")))
             {
                 log.Info($"*** file {name} for folder {folderName} - found");
                 await starter.RaiseEventAsync(instanceId, name, null);
