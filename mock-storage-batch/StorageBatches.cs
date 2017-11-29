@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Formatting;
@@ -21,22 +22,15 @@ namespace mock_storage_batch
             var folderName = context.GetInput<string>();
             log.Info($"Starting: {folderName}");
 
-            log.Verbose($"** in RunOrchestrator {folderName}");
-            await context.WaitForExternalEvent<object>("file1");
-            log.Verbose($"** in RunOrchestrator {folderName} **** file1");
-            await context.WaitForExternalEvent<object>("file2");
-            log.Verbose($"** in RunOrchestrator {folderName} **** file2");
-            await context.WaitForExternalEvent<object>("file3");
-            log.Verbose($"** in RunOrchestrator {folderName} **** file3");
-            await context.WaitForExternalEvent<object>("file4");
-            log.Verbose($"** in RunOrchestrator {folderName} **** file4");
+            var filesToWaitFor = new[] { "file1", "file2", "file3", "file4" };
 
+            var fileWaitTasks = filesToWaitFor.Select(f => context.WaitForExternalEvent<object>(f));
+            await Task.WhenAll(fileWaitTasks);
 
-
-            DeleteFile(folderName, "file1.txt", log);
-            DeleteFile(folderName, "file2.txt", log);
-            DeleteFile(folderName, "file3.txt", log);
-            DeleteFile(folderName, "file4.txt", log);
+            foreach (var fileToWaitFor in filesToWaitFor)
+            {
+                DeleteFile(folderName, $"{fileToWaitFor}.txt", log);
+            }
 
             log.Info($"Done: {folderName}");
             return folderName;
