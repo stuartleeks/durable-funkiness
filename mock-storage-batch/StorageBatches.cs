@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Formatting;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
@@ -14,6 +15,8 @@ namespace mock_storage_batch
 {
     public static class StorageBatches
     {
+        public static TimeSpan WaitForFilesTimeout => TimeSpan.FromSeconds(120); // 2 minute timeout waiting for files
+
         public class BatchContext
         {
             public string FolderName { get; set; }
@@ -51,12 +54,31 @@ namespace mock_storage_batch
             var batchContext = context.GetInput<BatchContext>();
             log.Info($"Starting: {batchContext.BatchId} (folder: {batchContext.FolderName})");
 
-
-            // Wait for events for all required files
-            var requiredFileTasks = batchContext.RequiredFiles
+            using (var cts = new CancellationTokenSource())
+            {
+                // Wait for events for all required files
+                var requiredFileTasks = batchContext.RequiredFiles
                                             .Select(f => context.WaitForExternalEvent<object>(EventNames.NewFile(f)))
                                             .ToArray();
-            await Task.WhenAll(requiredFileTasks);
+                var gotFilesTask = Task.WhenAll(requiredFileTasks);
+
+
+                var timeoutTask = context.CreateTimer(context.CurrentUtcDateTime.Add(WaitForFilesTimeout), cts.Token);
+
+                var firedTask = await Task.WhenAny(gotFilesTask, timeoutTask);
+
+                if (firedTask == timeoutTask)
+                {
+                    log.Info($"Timeout waiting for batch files for batch {batchContext.BatchId}");
+                    // TODO take whatever action is required here (e.g. escalate for human intervention)
+                    return new BatchResponse
+                    {
+                        BatchId = batchContext.BatchId,
+                        Success = false
+                    };
+                }
+                cts.Cancel(); // cancel the timeout and continue processing...
+            }
 
             // Currently process all files in a single activity function
             // If each file can be processed independently then could split into multiple activity invocations
