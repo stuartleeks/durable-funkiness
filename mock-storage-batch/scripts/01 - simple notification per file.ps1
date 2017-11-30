@@ -38,7 +38,7 @@ $customerFiles | ForEach-Object {
     # Create file
     Set-Content -Path "$path\$($customerId)_$($timestamp)_$($_)" -Value "test"
     # Invoke trigger for each file
-    $r = Invoke-RestMethod "$functionUrl`?path=$path\$($customerId)_$($timestamp)_$($customerFiles[0])"
+    $r = Invoke-RestMethod "$functionUrl`?path=$path\$($customerId)_$($timestamp)_$(_)"
 }
 
 while ($true){
