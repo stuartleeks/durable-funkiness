@@ -11,7 +11,7 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.Host;
 
-namespace mock_storage_batch
+namespace mock_storage_batch_2
 {
     public static class StorageBatches
     {
@@ -58,7 +58,7 @@ namespace mock_storage_batch
             {
                 // Wait for events for all required files
                 var requiredFileTasks = batchContext.RequiredFiles
-                                            .Select(f => context.WaitForExternalEvent<object>(EventNames.NewFile(f)))
+                                            .Select(f => context.WaitForExternalEvent<object>(EventNames.NewFile($"{batchContext.BatchId}_{f}")))
                                             .ToArray();
                 var gotFilesTask = Task.WhenAll(requiredFileTasks);
 
@@ -112,12 +112,12 @@ namespace mock_storage_batch
                 var path = Path.Combine(batchContext.FolderName, $"{batchContext.BatchId}_{filename}");
                 if (File.Exists(path))
                 {
-                    log.Verbose($"*** Deleting {path}");
+                    log.Verbose($"Deleting {path}");
                     File.Delete(path);
                 }
                 else
                 {
-                    log.Error($"*** Missing file {path}"); // shouldn't hit this!
+                    log.Error($"Missing file {path}"); // shouldn't hit this!
                 }
             }
 
@@ -144,6 +144,19 @@ namespace mock_storage_batch
             var batchContext = GetBatchContextFromPath(path);
             var instanceId = $"instance-{batchContext.BatchId}";
 
+            // Determin if the path is for a file that we care about
+            var filename = Path.GetFileName(path);
+            if (batchContext.RequiredFiles.Any(f=> $"{batchContext.BatchId}_{f}" == filename))
+            {
+                log.Info($"*** Batch {batchContext.BatchId} - notification for {filename}");
+            }
+            else
+            {
+                log.Info($"*** Ignoring path: {path}");
+                return req.CreateResponse(HttpStatusCode.NoContent, "Path ignored", new JsonMediaTypeFormatter());
+            }
+
+
             // Find or start an orchestration instance
             log.Info($"*** TRIGGER: Looking up instance: {instanceId}");
             var status = await starter.GetStatusAsync(instanceId);
@@ -167,27 +180,12 @@ namespace mock_storage_batch
                 log.Info($"*** TRIGGER: Got existing instance for {instanceId} (name {status.Name}). status {status.RuntimeStatus})");
             }
 
-            // Raise events for files files that are already in place
-            log.Info($"*** TRIGGER: {instanceId}: Raising events for files that exist");
-            foreach (var requiredFile in batchContext.RequiredFiles)
-            {
-                await RaiseEventIfFileExists(starter, log, instanceId, batchContext.FolderName, batchContext.BatchId, requiredFile);
-            }
+
+            // Raise event for the file that triggered us
+            log.Info($"*** TRIGGER: {instanceId}: Raising event for file {filename}");
+            await starter.RaiseEventAsync(instanceId, EventNames.NewFile(filename), null);
 
             return starter.CreateCheckStatusResponse(req, instanceId);
-        }
-        private static async Task RaiseEventIfFileExists(DurableOrchestrationClient starter, TraceWriter log, string instanceId, string folderName, string batchId, string filename)
-        {
-            var concatenatedFilename = $"{batchId}_{filename}";
-            if (File.Exists(Path.Combine(folderName, concatenatedFilename)))
-            {
-                log.Info($"*** TRIGGER: file {concatenatedFilename} for batch {batchId} - found");
-                await starter.RaiseEventAsync(instanceId, EventNames.NewFile(filename), null);
-            }
-            else
-            {
-                log.Info($"*** TRIGGER: file {concatenatedFilename} for batch {batchId} - missing");
-            }
         }
 
         /// <summary>
