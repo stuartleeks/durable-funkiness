@@ -48,15 +48,10 @@ namespace mock_storage_batch
 
 
             // Wait for events for all required files
-            //var requiredFileTasks = batchContext.RequiredFiles
-            //                                .Select(f => context.WaitForExternalEvent<object>(EventNames.NewFile(f)))
-            //                                .ToArray();
-            //await Task.WhenAll(requiredFileTasks);
-            foreach (var file in batchContext.RequiredFiles)
-            {
-                await context.WaitForExternalEvent<object>(EventNames.NewFile(file));
-            }
-
+            var requiredFileTasks = batchContext.RequiredFiles
+                                            .Select(f => context.WaitForExternalEvent<object>(EventNames.NewFile(f)))
+                                            .ToArray();
+            await Task.WhenAll(requiredFileTasks);
 
             // Currently process all files in a single activity function
             // If each file can be processed independently then could split into multiple activity invocations
@@ -146,6 +141,12 @@ namespace mock_storage_batch
             {
                 await RaiseEventIfFileExists(starter, log, instanceId, batchContext.FolderName, batchContext.BatchId, requiredFile);
             }
+
+            Func<string, Task> bar = async delegate (string foo)
+            {
+                await Task.Delay(100);
+            };
+
 
             return starter.CreateCheckStatusResponse(req, instanceId);
         }
