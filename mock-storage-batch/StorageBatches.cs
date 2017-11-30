@@ -21,6 +21,11 @@ namespace mock_storage_batch
             public string BatchId { get; set; }
             public string[] RequiredFiles { get; set; }
         }
+        public class BatchResponse
+        {
+            public string BatchId { get; set; }
+            public bool Success { get; set; }
+        }
 
         public static class RuntimeStatus
         {
@@ -39,7 +44,7 @@ namespace mock_storage_batch
         }
 
         [FunctionName("StorageBatches")]
-        public static async Task<string> RunOrchestrator(
+        public static async Task<BatchResponse> RunOrchestrator(
             [OrchestrationTrigger] DurableOrchestrationContext context,
             TraceWriter log)
         {
@@ -58,7 +63,11 @@ namespace mock_storage_batch
             await context.CallActivityAsync("ProcessFiles", batchContext);
 
             log.Info($"Done: {batchContext.BatchId} (folder: {batchContext.FolderName})");
-            return batchContext.BatchId;
+            return new BatchResponse
+            {
+                BatchId = batchContext.BatchId,
+                Success = true
+            };
         }
 
         [FunctionName("ProcessFiles")]
