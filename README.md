@@ -28,3 +28,13 @@ mock-storage-batch caters for not receiving an event for every file - it just re
 mock-storage-batch-2 requires a trigger for each file but is more efficient in terms of the number of External Events that it raises (which reduces the number of invocations of the orchestrator function instance).
 
 In both projects there is a scripts folder with powershell scripts to exercise different scenarios.
+
+## starting-orchestrations
+
+This project is used to explore multiple triggers firing in quick succession for scenarios where you want all certain groups of trigger events passed to a **single** instance of an orchestration.
+
+For this, the orchestration is kept really simple, and there is a script in the `scripts` folder that fires triggers in rapid succession.
+
+The trigger function attempts to route all events for a given instanceid (a query string parameter passed in) to the same instance of an orchestration, creating it if it isn't running.
+
+By tweaking the `count` and `delayInMilliseconds` parameters in the script you can exercise the function in different ways.
