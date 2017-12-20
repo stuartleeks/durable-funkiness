@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "mock-storage-batch", "mock-
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "mock-storage-batch-2", "mock-storage-batch-2\mock-storage-batch-2.csproj", "{88B710F0-30F8-4B62-ABD2-1DF6EBBB640C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "starting-orchestrations", "starting-orchestrations\starting-orchestrations.csproj", "{DB0BBADE-DE0E-4E17-BE42-65B2E3051CA3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "starting-orchestrations", "starting-orchestrations\starting-orchestrations.csproj", "{DB0BBADE-DE0E-4E17-BE42-65B2E3051CA3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "raise-events", "raise-events\raise-events.csproj", "{3D3F2727-E5D4-4D7B-9710-54F01870D4D1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{DB0BBADE-DE0E-4E17-BE42-65B2E3051CA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DB0BBADE-DE0E-4E17-BE42-65B2E3051CA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DB0BBADE-DE0E-4E17-BE42-65B2E3051CA3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D3F2727-E5D4-4D7B-9710-54F01870D4D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D3F2727-E5D4-4D7B-9710-54F01870D4D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D3F2727-E5D4-4D7B-9710-54F01870D4D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D3F2727-E5D4-4D7B-9710-54F01870D4D1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
