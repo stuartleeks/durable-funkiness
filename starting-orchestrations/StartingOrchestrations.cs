@@ -101,7 +101,7 @@ namespace starting_orchestrations
             if (orchestrationInput.WaitTimeInMilliseconds > 0)
             {
                 var fireAt = context.CurrentUtcDateTime + TimeSpan.FromMilliseconds(orchestrationInput.WaitTimeInMilliseconds);
-                context.CreateTimer(fireAt, CancellationToken.None);
+                await context.CreateTimer(fireAt, CancellationToken.None);
             }
 
             log.Info($"*** ORCHESTRATOR Done: {context.InstanceId} - id = {orchestrationInput.Id}");
