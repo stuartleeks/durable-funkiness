@@ -42,16 +42,16 @@ namespace raise_events
             // Function input comes from the request content.
             string instanceId = await starter.StartNewAsync("RaiseEvents", null);
 
-            log.Info($"Started orchestration with ID = '{instanceId}'.");
+            log.Info($"TRIGGER: Started orchestration with ID = '{instanceId}'.");
 
             // workaround for https://github.com/Azure/azure-functions-durable-extension/issues/101
-            log.Info($"Checking for orchestration with ID {instanceId}...");
+            log.Info($"TRIGGER: Checking for orchestration with ID {instanceId}...");
             while (null == await starter.GetStatusAsync(instanceId))
             {
                 System.Threading.Thread.Sleep(500);
-                log.Info($"Checking for orchestration with ID {instanceId}...");
+                log.Info($"TRIGGER: Checking for orchestration with ID {instanceId}...");
             }
-            log.Info($"Checking for orchestration with ID {instanceId}... found it!");
+            log.Info($"TRIGGER: Checking for orchestration with ID {instanceId}... found it!");
 
 
             await starter.RaiseEventAsync(instanceId, "TheEvent", null);

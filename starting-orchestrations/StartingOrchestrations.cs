@@ -70,7 +70,7 @@ namespace starting_orchestrations
             }
 
 
-            // Find or start an orchestration instance
+            // Find or start an orchestration instance  
             log.Info($"*** TRIGGER {instanceId}, {id}: Looking up instance");
             var status = await starter.GetStatusAsync(instanceId);
             if (status == null)
@@ -88,7 +88,7 @@ namespace starting_orchestrations
         }
 
         [FunctionName("StorageBatches")]
-        public static bool RunOrchestrator(
+        public static async Task<bool> RunOrchestratorAsync(
           [OrchestrationTrigger] DurableOrchestrationContext context,
           TraceWriter log)
         {
